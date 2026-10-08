@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>دسته</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+#pad{display:none;width:min(80vw,320px);aspect-ratio:1;border-radius:50%;background:var(--panel);border:4px solid var(--yellow);position:relative;touch-action:none}
+#knob{position:absolute;width:34%;height:34%;border-radius:50%;background:var(--yellow);left:33%;top:33%}
+</style></head><body>
+<div id="join" class="row">
+  <h1>دسته</h1>
+  <input id="code" maxlength="4" placeholder="کد اتاق" autocapitalize="characters">
+  <input id="name" maxlength="12" placeholder="اسمت">
+  <button id="go">ورود</button>
+</div>
+<div id="err"></div>
+<div id="pad"><div id="knob"></div></div>
+<script src="config.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+$('code').value=(new URLSearchParams(location.search).get('c')||'').toUpperCase();
+let ws,vec={x:0,y:0},sent='';
+
+$('go').onclick=()=>{
+  ws=new WebSocket(window.WS_URL);
+  ws.onopen=()=>ws.send(JSON.stringify({t:'join',code:$('code').value,name:$('name').value||'بازیکن'}));
+  ws.onmessage=e=>{
+    const m=JSON.parse(e.data);
+    if(m.t==='joined'){$('join').style.display='none';$('pad').style.display='block';$('err').textContent='';}
+    else if(m.t==='msg'&&m.d.color){document.body.style.background=m.d.color+'33';$('knob').style.background=m.d.color;}
+    else if(m.t==='error'){$('err').textContent=m.msg;}
+  };
+  ws.onclose=()=>{$('err').textContent='اتصال قطع شد';$('pad').style.display='none';$('join').style.display='flex';};
+};
+
+const pad=$('pad'),knob=$('knob');
+function move(ev){
+  const t=ev.touches?ev.touches[0]:ev,r=pad.getBoundingClientRect(),R=r.width/2;
+  let x=(t.clientX-r.left-R)/R,y=(t.clientY-r.top-R)/R,l=Math.hypot(x,y);
+  if(l>1){x/=l;y/=l;}
+  vec={x,y};
+  knob.style.left=(33+x*33)+'%';knob.style.top=(33+y*33)+'%';
+}
+function stop(){vec={x:0,y:0};knob.style.left='33%';knob.style.top='33%';}
+pad.addEventListener('touchstart',e=>{e.preventDefault();move(e)},{passive:false});
+pad.addEventListener('touchmove',e=>{e.preventDefault();move(e)},{passive:false});
+pad.addEventListener('touchend',stop);
+pad.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'){move(e);pad.onpointermove=move;}});
+addEventListener('pointerup',()=>{pad.onpointermove=null;stop();});
+
+setInterval(()=>{
+  if(!ws||ws.readyState!==1)return;
+  const s=vec.x.toFixed(2)+','+vec.y.toFixed(2);
+  if(s===sent)return;sent=s;
+  ws.send(JSON.stringify({t:'input',d:{x:+vec.x.toFixed(2),y:+vec.y.toFixed(2)}}));
+},33);
+</script></body></html>

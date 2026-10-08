@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>صفحه‌ی بازی</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;800;900&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#1b1340;color:#fff8e7;font-family:Vazirmatn,system-ui,sans-serif;overflow:hidden}
+#top{position:fixed;inset:0 0 auto 0;padding:10px 16px;display:flex;justify-content:space-between;gap:16px;align-items:center;background:#2a1f5ccc;z-index:2;flex-wrap:wrap}
+#code{font-size:2.4rem;font-weight:900;color:#ffd23f;letter-spacing:.25em;direction:ltr}
+#score{display:flex;gap:14px;flex-wrap:wrap}
+#score span{font-weight:800}
+canvas{display:block;width:100vw;height:100vh}
+</style></head><body>
+<div id="top"><div>کد اتاق: <span id="code">----</span><br><small id="hint"></small></div><div id="score"></div></div>
+<canvas id="c"></canvas>
+<script src="config.js"></script>
+<script>
+const COLORS=['#ffd23f','#ff5d8f','#3ddc97','#4cc9f0','#ff9f1c','#b388ff','#f72585','#80ed99'];
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const players=new Map();let dot=null;
+function resize(){cv.width=innerWidth;cv.height=innerHeight;}addEventListener('resize',resize);resize();
+function spawnDot(){dot={x:60+Math.random()*(cv.width-120),y:120+Math.random()*(cv.height-180)};}spawnDot();
+
+const ws=new WebSocket(window.WS_URL);
+ws.onopen=()=>ws.send(JSON.stringify({t:'host'}));
+ws.onclose=()=>{document.getElementById('hint').textContent='اتصال قطع شد، صفحه رو رفرش کن'};
+ws.onmessage=(e)=>{
+  const m=JSON.parse(e.data);
+  if(m.t==='room'){
+    document.getElementById('code').textContent=m.code;
+    const base=location.href.replace('host.html','controller.html');
+    document.getElementById('hint').textContent='با گوشی برو به '+base.replace(/^https?:\/\//,'')+'?c='+m.code;
+  }else if(m.t==='join'){
+    const color=COLORS[(m.id-1)%COLORS.length];
+    players.set(m.id,{name:m.name,color,x:cv.width/2,y:cv.height/2,ix:0,iy:0,score:0});
+    ws.send(JSON.stringify({t:'to',id:m.id,d:{color}}));
+  }else if(m.t==='input'){
+    const p=players.get(m.id);if(p){p.ix=m.d.x||0;p.iy=m.d.y||0;}
+  }else if(m.t==='leave'){players.delete(m.id);}
+};
+
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  if(dot){ctx.fillStyle='#fff8e7';ctx.beginPath();ctx.arc(dot.x,dot.y,12,0,7);ctx.fill();}
+  players.forEach(p=>{
+    p.x=Math.max(24,Math.min(cv.width-24,p.x+p.ix*320*dt));
+    p.y=Math.max(90,Math.min(cv.height-24,p.y+p.iy*320*dt));
+    if(dot&&Math.hypot(p.x-dot.x,p.y-dot.y)<36){p.score++;spawnDot();}
+    ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,24,0,7);ctx.fill();
+    ctx.fillStyle='#fff8e7';ctx.font='700 16px Vazirmatn,sans-serif';ctx.textAlign='center';ctx.fillText(p.name,p.x,p.y-34);
+  });
+  document.getElementById('score').innerHTML=[...players.values()].map(p=>`<span style="color:${p.color}">${p.name}: ${p.score}</span>`).join('');
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script></body></html>
